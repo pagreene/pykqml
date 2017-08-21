@@ -64,7 +64,7 @@ class KQMLModule(object):
     def __init__(self, argv=None, **kwargs):
         defaults = dict(host='localhost', port=6200, is_application=False,
                         testing=False, socket=None, name=None, group_name=None,
-                        scan_for_port=False, debug=False)
+                        scan_for_port=False, debug=False, out=None)
         self.dispatcher = None
         self.MAX_PORT_TRIES = 100
         self.reply_id_counter=1
@@ -106,7 +106,8 @@ class KQMLModule(object):
                 (self.inp, self.out)
         else:
             self.logger.info('Using stdio connection')
-            self.out = sys.stdout
+            if self.out is None:
+                self.out = sys.stdout
             self.inp = KQMLReader(sys.stdin)
 
         self.dispatcher = KQMLDispatcher(self, self.inp, self.name)

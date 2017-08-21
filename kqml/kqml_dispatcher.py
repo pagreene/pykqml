@@ -1,4 +1,6 @@
 import logging
+from threading import Thread
+from kqml.kqml_exceptions import KQMLException
 
 logger = logging.getLogger('KQMLDispatcher')
 
@@ -14,10 +16,11 @@ class KQMLDispatcher(object):
         self.logger = logging.getLogger(agent_name)
         self.counter += 1
         self.shutdown_initiated = False
-
-    def start(self):
+        self._handle = None
+        
+    def _watch(self):
         try:
-            while True:
+            while not self.shutdown_initiated:
                 msg = self.reader.read_performative()
                 self.dispatch_message(msg)
         # FIXME: not handling KQMLException and
@@ -30,13 +33,30 @@ class KQMLDispatcher(object):
             if not self.shutdown_initiated:
                 self.receiver.handle_exception(ex)
         except ValueError:
-            return
+            pass
+        return
+
+    def start(self):
+        if self._handle is None and not self.shutdown_initiated:
+            self._handle = Thread(target = self._watch, name = "watcher")
+            self._handle.start()
+        else:
+            raise KQMLException(
+                "Something went wrong trying to start watcher thread."
+                )
+        return
 
     def warn(self, msg):
         logger.warning(msg)
 
     def shutdown(self):
         self.shutdown_initiated = True
+        if self._handle.is_alive():
+            self._handle.join(5)
+        if self._handle.is_alive():
+            raise KQMLException(
+                "Something went wrong shutting down watcher."
+                )
         try:
             # FIXME: print thread info instead of blank quotes
             self.logger.error('KQML dispatcher shutdown: ' + '' +
