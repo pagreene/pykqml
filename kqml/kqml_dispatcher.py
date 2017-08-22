@@ -1,6 +1,7 @@
 import logging
 from threading import Thread
 from kqml.kqml_exceptions import KQMLException
+from time import sleep
 
 logger = logging.getLogger('KQMLDispatcher')
 
@@ -17,23 +18,30 @@ class KQMLDispatcher(object):
         self.counter += 1
         self.shutdown_initiated = False
         self._handle = None
+        self._end_condition = None
         
     def _watch(self):
         try:
             while not self.shutdown_initiated:
+                print('Reading again.')
                 msg = self.reader.read_performative()
                 self.dispatch_message(msg)
+                sleep(0.3)
         # FIXME: not handling KQMLException and
         # KQMLBadCharacterException
-        except KeyboardInterrupt:
-            self.receiver.receive_eof()
         except EOFError:
-            self.receiver.receive_eof()
+            self._end_condition = "EOF"
         except IOError as ex:
             if not self.shutdown_initiated:
                 self.receiver.handle_exception(ex)
+            self._end_condition = "IO"
         except ValueError:
+            self._end_condition = "Value"
             pass
+        except BaseException as ex:
+            self._end_condition = ex
+        if self._end_condition is None:
+            self._end_condition = "Normal"
         return
 
     def start(self):
@@ -44,6 +52,11 @@ class KQMLDispatcher(object):
             raise KQMLException(
                 "Something went wrong trying to start watcher thread."
                 )
+        return
+    
+    def wait(self):
+        """Wait for the thread to end of its own accord"""
+        self._handle.join()
         return
 
     def warn(self, msg):
@@ -57,6 +70,10 @@ class KQMLDispatcher(object):
             raise KQMLException(
                 "Something went wrong shutting down watcher."
                 )
+        if self._end_condition is "EOF":
+            self.receiver.receive_eof()
+        elif isinstance(self._end_condition, BaseException):
+            raise self._end_condition
         try:
             # FIXME: print thread info instead of blank quotes
             self.logger.error('KQML dispatcher shutdown: ' + '' +

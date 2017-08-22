@@ -113,10 +113,18 @@ class KQMLModule(object):
         self.dispatcher = KQMLDispatcher(self, self.inp, self.name)
 
         self.register()
+        
+    def __del__(self):
+        self.exit(0)
 
-    def start(self):
+    def start(self, block = False):
         if not self.testing:
             self.dispatcher.start()
+        if block:
+            try:
+                self.dispatcher.wait()
+            except KeyboardInterrupt:
+                self.receive_eof()
 
     def subscribe_request(self, req_type):
         msg = KQMLPerformative('subscribe')
@@ -190,7 +198,8 @@ class KQMLModule(object):
         if self.is_application:
             sys.exit(n)
         else:
-            if self.dispatcher is not None:
+            if (self.dispatcher is not None and 
+                    not self.dispatcher.shutdown_initiated):
                 self.dispatcher.shutdown()
             sys.exit(n)
 
@@ -356,4 +365,4 @@ class KQMLModule(object):
         self.reply(msg, reply_msg)
 
 if __name__ == '__main__':
-    KQMLModule(argv=sys.argv[1:]).start()
+    KQMLModule(argv=sys.argv[1:]).start(block=True)
